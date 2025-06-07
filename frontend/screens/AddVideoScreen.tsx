@@ -12,6 +12,7 @@ interface Props {
 
 export default function AddVideoScreen({ navigation }: Props): JSX.Element {
   const [videoUrl, setVideoUrl] = useState<string>('');
+  const [videoTitle, setVideoTitle] = useState<string>('');
   const [playlistName, setPlaylistName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -34,12 +35,14 @@ export default function AddVideoScreen({ navigation }: Props): JSX.Element {
     const payload: AddVideoPayload = {
       playlistName: playlistName.trim(),
       videoUrl: videoUrl.trim(),
+      videoTitle: videoTitle.trim() || undefined, // Send undefined if empty
     };
 
     try {
       await ApiService.addVideoToPlaylist(payload);
       Alert.alert("成功", "動画がプレイリストに追加されました。");
       setVideoUrl('');
+      setVideoTitle('');
       setPlaylistName('');
       navigation.goBack();
     } catch (error: any) {
@@ -60,6 +63,13 @@ export default function AddVideoScreen({ navigation }: Props): JSX.Element {
         onChangeText={setVideoUrl}
         keyboardType="url"
         autoCapitalize="none"
+      />
+      <Text style={styles.label}>動画のタイトル (任意):</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="例: 面白い猫の動画"
+        value={videoTitle}
+        onChangeText={setVideoTitle}
       />
       <Text style={styles.label}>プレイリスト名:</Text>
       <TextInput

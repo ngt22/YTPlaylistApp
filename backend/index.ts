@@ -1,5 +1,5 @@
-// Lambda関数のindex.js
-import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'; // ★型をV2用に変更 (推奨)
+// Lambda function handler (index.js)
+import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'; // Using V2 type for APIGatewayProxyEventV2 (recommended)
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const {
   DynamoDBDocumentClient,
@@ -11,19 +11,19 @@ const {
 } = require("@aws-sdk/lib-dynamodb");
 const { randomUUID } = require('crypto'); // videoId生成用
 
-// DynamoDBクライアントの初期化
-const client = new DynamoDBClient({ region: "ap-southeast-2" }); // リージョンを適宜変更
+// Initialize DynamoDB DocumentClient
+const client = new DynamoDBClient({ region: process.env.AWS_REGION_DEFAULT || "ap-southeast-2" });
 const docClient = DynamoDBDocumentClient.from(client);
 
-const PLAYLISTS_TABLE_NAME = process.env.PLAYLISTS_TABLE_NAME || 'YouTubePlaylistsTS'; // 環境変数から取得
+const PLAYLISTS_TABLE_NAME = process.env.PLAYLISTS_TABLE_NAME || 'YouTubePlaylistsTS'; // Get from environment variable
 
-// ヘルパー関数: レスポンスを生成
+// Helper function: Generate API response
 const createResponse = (statusCode, body) => {
   return {
     statusCode,
     headers: {
       "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*", // CORS設定 (開発用、本番ではより厳密に)
+      "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "YOUR_FRONTEND_URL_HERE_OR_LOCALHOST_FOR_DEV", // CORS settings: Use FRONTEND_URL env var or a placeholder
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Amz-Date, X-Api-Key, X-Amz-Security-Token"
     },
@@ -31,45 +31,63 @@ const createResponse = (statusCode, body) => {
   };
 };
 
-// YouTube URLからVideo IDを抽出する簡単な関数 (より堅牢な実装を推奨)
-function extractYouTubeVideoId(url) {
+// Helper function to extract YouTube Video ID from various URL formats.
+function extractYouTubeVideoId(url: string): string | null {
+  if (!url) {
+    return null;
+  }
+  // Regular expression to cover various YouTube URL formats
   const patterns = [
-    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&#]+)/,
-    /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([^?&#]+)/,
-    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([^?&#]+)/,
-    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([^?&#]+)/
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/|playlist\?list=.*&v=)([a-zA-Z0-9_-]{11})/,
+    /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})(?:\?.*)?/,
+    /(?:https?:\/\/)?(?:www\.)?m\.youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/)([a-zA-Z0-9_-]{11})/
   ];
+
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match && match[1]) {
-      return match[1];
+      // Ensure the matched ID is a valid YouTube ID length
+      if (match[1].length === 11) {
+        return match[1];
+      }
     }
   }
-  return null; // マッチしない場合はnull
+  // Fallback for URLs that might have the video ID as a query parameter 'v' but not caught by other regexes
+  try {
+    const parsedUrl = new URL(url);
+    const videoId = parsedUrl.searchParams.get('v');
+    if (videoId && videoId.length === 11 && /^[a-zA-Z0-9_-]+$/.test(videoId)) {
+      return videoId;
+    }
+  } catch (e) {
+    // Invalid URL, ignore
+  }
+
+  return null; // Return null if no match
 }
 
 
 exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2>=> {
  console.log("Received event:", JSON.stringify(event, null, 2));
-  const httpMethod = event.requestContext.http.method; // ★修正
-  const path = event.requestContext.http.path;       // ★修正 (または event.rawPath でも可)
+  const httpMethod = event.requestContext.http.method; // Adjusted for V2 event structure
+  const path = event.requestContext.http.path;       // Adjusted for V2 event structure (または event.rawPath でも可)
   const body = event.body ? JSON.parse(event.body) : {};
   // const userId = event.requestContext?.authorizer?.claims?.sub || 'defaultUser'; // Cognito認証などを使用する場合
 
   try {
-    // OPTIONSメソッドはCORSプリフライトリクエスト用
+    // OPTIONS method is for CORS preflight requests
     if (httpMethod === "OPTIONS") {
       return createResponse(200, { message: "CORS preflight" });
     }
 
-    // ルーティング
+    // Routing
     if (path === "/playlists" && httpMethod === "GET") {
-      // 全プレイリスト取得 (実際にはユーザーIDでフィルタリング)
+      // Get all playlists (in a real scenario, filter by userId)
       const command = new ScanCommand({ TableName: PLAYLISTS_TABLE_NAME });
       const { Items } = await docClient.send(command);
       return createResponse(200, Items || []);
     } else if (path === "/videos" && httpMethod === "POST") {
-      // 動画をプレイリストに追加または新規プレイリスト作成
+      // Add video to playlist or create new playlist
       const { playlistName, videoUrl, videoTitle } = body;
       if (!playlistName || !videoUrl) {
         return createResponse(400, { error: "playlistName and videoUrl are required" });
@@ -81,27 +99,27 @@ exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
       }
 
       const newVideo = {
-        videoId: randomUUID(), // 動画ごとにユニークなID
+        videoId: randomUUID(), // Unique ID for each video
         url: videoUrl,
-        title: videoTitle || `動画 - ${extractedVideoId}`, // タイトルがなければURLの一部など
+        title: videoTitle || `動画 - ${extractedVideoId}`, // If title is not provided, use part of the URL or a default
         addedAt: new Date().toISOString(),
       };
 
-      // playlistNameで既存のプレイリストを検索 (Scanは大規模テーブルには非効率。Queryを使うか、playlistIdをクライアントから渡す設計が良い)
-      // ここでは簡単のため、playlistNameをIDの一部として扱うか、別途検索する
-      // より良い設計: クライアントがplaylistIdを指定する。なければ新規作成フローへ。
-      // 今回は、playlistName で検索し、なければ新規作成、あれば追加する簡易的なロジック
-      const scanCommand = new ScanCommand({
+      // Search for existing playlist by playlistName using a QueryCommand.
+      // This requires a Global Secondary Index (GSI) on the 'name' attribute of the PLAYLISTS_TABLE_NAME table.
+      // If a GSI named 'PlaylistNameIndex' (or similar) exists with 'name' as its hash key:
+      const queryCommand = new QueryCommand({
         TableName: PLAYLISTS_TABLE_NAME,
-        FilterExpression: "#nm = :name", // #nm は name のエイリアス
+        IndexName: "PlaylistNameIndex", // IMPORTANT: This is an assumed GSI name. Adjust if different.
+        KeyConditionExpression: "#nm = :name",
         ExpressionAttributeNames: { "#nm": "name" },
         ExpressionAttributeValues: { ":name": playlistName },
       });
-      const { Items: existingPlaylists } = await docClient.send(scanCommand);
+      const { Items: existingPlaylists } = await docClient.send(queryCommand);
 
       let playlistId;
       if (existingPlaylists && existingPlaylists.length > 0) {
-        // 既存のプレイリストに追加
+        // Add to existing playlist
         playlistId = existingPlaylists[0].playlistId;
         const updateCommand = new UpdateCommand({
           TableName: PLAYLISTS_TABLE_NAME,
@@ -116,8 +134,8 @@ exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
         await docClient.send(updateCommand);
         return createResponse(200, { message: "Video added to existing playlist", playlistId, video: newVideo });
       } else {
-        // 新規プレイリスト作成
-        playlistId = randomUUID(); // 新しいプレイリストID
+        // Create new playlist
+        playlistId = randomUUID(); // New playlist ID
         const putCommand = new PutCommand({
           TableName: PLAYLISTS_TABLE_NAME,
           Item: {
@@ -125,20 +143,20 @@ exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
             name: playlistName,
             videos: [newVideo],
             createdAt: new Date().toISOString(),
-            // userId: userId, // 認証導入後
+            // userId: userId, // Add after authentication is implemented
           },
         });
         await docClient.send(putCommand);
         return createResponse(201, { message: "New playlist created and video added", playlistId, video: newVideo });
       }
     } else if (path.startsWith("/playlists/") && httpMethod === "DELETE") {
-        // 例: /playlists/{playlistId}/videos/{videoId}
+        // Example path: /playlists/{playlistId}/videos/{videoId}
         const parts = path.split('/');
         if (parts.length === 5 && parts[3] === 'videos') {
             const playlistId = parts[2];
             const videoIdToDelete = parts[4];
 
-            // まずプレイリストを取得
+            // First, get the playlist
             const getCmd = new GetCommand({
                 TableName: PLAYLISTS_TABLE_NAME,
                 Key: { playlistId: playlistId }
@@ -149,14 +167,14 @@ exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
                 return createResponse(404, { error: "Playlist or videos not found" });
             }
 
-            // videoIdToDelete に一致しない動画のみで新しい動画リストを作成
+            // Create a new list of videos, excluding the one with videoIdToDelete
             const updatedVideos = playlist.videos.filter(video => video.videoId !== videoIdToDelete);
 
             if (updatedVideos.length === playlist.videos.length) {
                  return createResponse(404, { error: "Video ID not found in playlist" });
             }
 
-            // 動画リストを更新
+            // Update the videos list
             const updateCmd = new UpdateCommand({
                 TableName: PLAYLISTS_TABLE_NAME,
                 Key: { playlistId: playlistId },
@@ -170,7 +188,7 @@ exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
             return createResponse(200, { message: "Video deleted successfully" });
         }
     }
-    // TODO: 他のCRUD操作 (プレイリストの更新、削除など)
+    // TODO: Implement other CRUD operations (update/delete playlists, etc.)
 
     return createResponse(404, { error: "Not Found" });
 
