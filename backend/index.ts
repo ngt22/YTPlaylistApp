@@ -1,5 +1,6 @@
 // Lambda function handler (index.js)
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'; // Using V2 type for APIGatewayProxyEventV2 (recommended)
+const getYoutubeThumbnail = require('youtube-thumbnail-grabber');
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const {
   DynamoDBDocumentClient,
@@ -98,11 +99,14 @@ exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
           return createResponse(400, { error: "Invalid YouTube URL or unable to extract video ID." });
       }
 
+      const thumbnail = await getYoutubeThumbnail(extractedVideoId);
+
       const newVideo = {
         videoId: randomUUID(), // Unique ID for each video
         url: videoUrl,
         title: videoTitle || `動画 - ${extractedVideoId}`, // If title is not provided, use part of the URL or a default
         addedAt: new Date().toISOString(),
+        thumbnailUrl: thumbnail.high.url, // Or thumbnail.url for default size
       };
 
       // Search for existing playlist by playlistName using a QueryCommand.

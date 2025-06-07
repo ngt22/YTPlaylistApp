@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.821.0",
-    "@aws-sdk/lib-dynamodb": "^3.821.0"
+    "@aws-sdk/lib-dynamodb": "^3.821.0",
+    "youtube-thumbnail-grabber": "^1.0.1"
   }
 }
