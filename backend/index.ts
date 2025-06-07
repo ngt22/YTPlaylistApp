@@ -99,14 +99,33 @@ exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
           return createResponse(400, { error: "Invalid YouTube URL or unable to extract video ID." });
       }
 
-      const thumbnail = await getYoutubeThumbnail(extractedVideoId);
+      let videoThumbnailUrl = null; // Initialize videoThumbnailUrl
+      try {
+          const thumbnailData = await getYoutubeThumbnail(extractedVideoId);
+          if (thumbnailData) {
+              if (thumbnailData.high && thumbnailData.high.url) {
+                  videoThumbnailUrl = thumbnailData.high.url;
+              } else if (thumbnailData.medium && thumbnailData.medium.url) {
+                  videoThumbnailUrl = thumbnailData.medium.url;
+              } else if (thumbnailData.default && thumbnailData.default.url) {
+                  videoThumbnailUrl = thumbnailData.default.url;
+              } else {
+                  console.warn(`No suitable thumbnail resolution found for video ID ${extractedVideoId}. Thumbnail data: ${JSON.stringify(thumbnailData)}`);
+              }
+          } else {
+              console.warn(`No thumbnail data returned for video ID ${extractedVideoId}.`);
+          }
+      } catch (thumbError) {
+          console.error(`Error fetching thumbnail for video ID ${extractedVideoId}:`, thumbError);
+          // videoThumbnailUrl remains null, allowing video to be saved without a thumbnail
+      }
 
       const newVideo = {
         videoId: randomUUID(), // Unique ID for each video
         url: videoUrl,
         title: videoTitle || `動画 - ${extractedVideoId}`, // If title is not provided, use part of the URL or a default
         addedAt: new Date().toISOString(),
-        thumbnailUrl: thumbnail.high.url, // Or thumbnail.url for default size
+        thumbnailUrl: videoThumbnailUrl, // Use the safely extracted or null URL
       };
 
       // Search for existing playlist by playlistName using a QueryCommand.
