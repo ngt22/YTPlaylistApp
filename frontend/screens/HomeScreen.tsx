@@ -51,7 +51,14 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
       )}
       <FlatList<Playlist>
         data={playlists}
-        keyExtractor={(item) => item.playlistId}
+        keyExtractor={(item, index) => {
+          if (item && typeof item.playlistId === 'string' && item.playlistId.length > 0) {
+            return item.playlistId;
+          }
+          // Log an error or warning if playlistId is missing or invalid
+          console.warn(`Missing or invalid playlistId for item at index ${index}. Using index as fallback key.`);
+          return `playlist-fallback-${index}`; // Fallback key
+        }}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.playlistItem}

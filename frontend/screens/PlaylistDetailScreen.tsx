@@ -73,7 +73,14 @@ export default function PlaylistDetailScreen({ route, navigation }: Props): JSX.
       <Text style={styles.playlistTitle}>{playlist.name || `プレイリスト ${playlist.playlistId}`}</Text>
       <FlatList<Video>
         data={playlist.videos}
-        keyExtractor={(item) => item.videoId}
+        keyExtractor={(item, index) => {
+          if (item && typeof item.videoId === 'string' && item.videoId.length > 0) {
+            return item.videoId;
+          }
+          // Log an error or warning if videoId is missing or invalid
+          console.warn(`Missing or invalid videoId for item at index ${index} in playlist ${playlist?.playlistId}. Using index as fallback key.`);
+          return `video-fallback-${playlist?.playlistId}-${index}`; // Fallback key
+        }}
         renderItem={({ item }) => (
           <View style={styles.videoItemContainer}>
             <TouchableOpacity onPress={() => openVideo(item.url)} style={styles.videoInfo}>
