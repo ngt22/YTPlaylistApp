@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, Button, Linking, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Button, Linking, Alert, TouchableOpacity, Image } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import ApiService, { RemoveVideoPayload } from '../services/ApiService'; // RemoveVideoPayload をインポート
 import { RouteProp, NavigationProp } from '@react-navigation/native';
@@ -83,6 +83,7 @@ export default function PlaylistDetailScreen({ route, navigation }: Props): JSX.
         }}
         renderItem={({ item }) => (
           <View style={styles.videoItemContainer}>
+            {item.thumbnailUrl && <Image source={{ uri: item.thumbnailUrl }} style={styles.thumbnail} />}
             <TouchableOpacity onPress={() => openVideo(item.url)} style={styles.videoInfo}>
               <Text style={styles.videoTitle}>{item.title || item.url}</Text>
             </TouchableOpacity>
@@ -111,4 +112,5 @@ const styles = StyleSheet.create({
   },
   videoInfo: { flex: 1 },
   videoTitle: { fontSize: 16 },
+  thumbnail: { width: 100, height: 56, marginRight: 10, borderRadius: 4 },
 });

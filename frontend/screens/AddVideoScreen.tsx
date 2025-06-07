@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import ApiService, { AddVideoPayload } from '../services/ApiService'; // AddVideoPayload をインポート
 import { NavigationProp } from '@react-navigation/native';
-import { RootStackParamList } from '../types';
+import { RootStackParamList, Playlist } from '../types';
 
 type AddVideoScreenNavigationProp = NavigationProp<RootStackParamList, 'AddVideo'>;
 
@@ -13,8 +14,23 @@ interface Props {
 export default function AddVideoScreen({ navigation }: Props): JSX.Element {
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [videoTitle, setVideoTitle] = useState<string>('');
-  const [playlistName, setPlaylistName] = useState<string>('');
+  const [playlistName, setPlaylistName] = useState<string>(''); // For the text input, can be populated by picker or typed
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [selectedPlaylistName, setSelectedPlaylistName] = useState<string>(''); // For Picker's selected value
   const [loading, setLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchPlaylists = async () => {
+      try {
+        const fetchedPlaylists = await ApiService.getPlaylists();
+        setPlaylists(fetchedPlaylists);
+      } catch (error) {
+        console.error("Failed to fetch playlists:", error);
+        Alert.alert("エラー", "プレイリストの読み込みに失敗しました。");
+      }
+    };
+    fetchPlaylists();
+  }, []);
 
   const isValidYouTubeUrl = (url: string): boolean => {
     const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
@@ -71,12 +87,38 @@ export default function AddVideoScreen({ navigation }: Props): JSX.Element {
         value={videoTitle}
         onChangeText={setVideoTitle}
       />
-      <Text style={styles.label}>プレイリスト名:</Text>
+
+      <Text style={styles.label}>プレイリストを選択または新規作成:</Text>
+      <Picker
+        selectedValue={selectedPlaylistName}
+        onValueChange={(itemValue, itemIndex) => {
+          setSelectedPlaylistName(itemValue);
+          if (itemValue) {
+            setPlaylistName(itemValue); // Update the text input as well
+          }
+        }}
+        style={styles.picker}
+      >
+        <Picker.Item label="既存のプレイリストを選択..." value="" />
+        {playlists.map((p) => (
+          <Picker.Item key={p.playlistId} label={p.name} value={p.name} />
+        ))}
+      </Picker>
+
+      <Text style={styles.label}>プレイリスト名 (新規または選択済み):</Text>
       <TextInput
         style={styles.input}
-        placeholder="例: お気に入り、学習用 (既存または新規)"
-        value={playlistName}
-        onChangeText={setPlaylistName}
+        placeholder="例: お気に入り、学習用"
+        value={playlistName} // This is the value submitted
+        onChangeText={text => {
+          setPlaylistName(text);
+          // If user types, deselect from picker if text doesn't match any existing playlist name
+          if (!playlists.find(p => p.name === text)) {
+              setSelectedPlaylistName("");
+          } else {
+              setSelectedPlaylistName(text); // Reselect picker if text input matches
+          }
+        }}
       />
       {loading ? (
         <ActivityIndicator size="large" style={styles.loader} />
@@ -94,6 +136,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ccc',
     padding: 10,
+    marginBottom: 20,
+    borderRadius: 5,
+  },
+  picker: {
+    borderWidth: 1,
+    borderColor: '#ccc',
     marginBottom: 20,
     borderRadius: 5,
   },

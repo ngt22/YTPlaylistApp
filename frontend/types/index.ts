@@ -3,7 +3,7 @@ export interface Video {
   videoId: string;
   url: string;
   title?: string;
-  thumbnail?: string;
+  thumbnailUrl?: string;
   addedAt: string;
 }
 
