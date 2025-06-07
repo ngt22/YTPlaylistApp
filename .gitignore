@@ -1,13 +1,13 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
-node_modules/
+# # dependencies
+# node_modules/
 
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
+# # Expo
+# .expo/
+# dist/
+# web-build/
+# expo-env.d.ts
 
 # Native
 .kotlin/
@@ -21,17 +21,44 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
+# # debug
+# npm-debug.*
+# yarn-debug.*
+# yarn-error.*
 
-# macOS
-.DS_Store
-*.pem
+# # macOS
+# .DS_Store
+# *.pem
 
 # local env files
 .env*.local
 
 # typescript
 *.tsbuildinfo
+
+# Frontend (Expo / React Native)
+frontend/node_modules/
+frontend/.expo/
+frontend/dist
+frontend/expo-env.d.ts
+frontend/web-build/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.tsbuildinfo
+
+# Backend (Node.js Lambda)
+backend/dist/
+backend/node_modules/
+backend/coverage/
+backend/.serverless/
+backend/package-lock.json # もしyarn.lockを使うなら
+# (Python Lambdaの場合)
+# backend/__pycache__/
+# backend/*.pyc
+# backend/venv/
+# backend/.env
+
+# OS generated files
+.DS_Store
+Thumbs.db
