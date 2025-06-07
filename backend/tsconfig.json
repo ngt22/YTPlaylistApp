@@ -1,0 +1,25 @@
+// backend-lambda/tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2020", // 出力する JavaScript のバージョン (Lambda の Node.js ランタイムに合わせる)
+    "module": "commonjs", // モジュールシステム (Node.js 標準)
+    "lib": ["ES2020"], // 利用可能なライブラリの型定義
+    "outDir": "./dist", // コンパイルされた JavaScript ファイルの出力先ディレクトリ
+    "rootDir": "./", // TypeScript ソースファイルのルートディレクトリ
+    "strict": true, // すべての厳格な型チェックオプションを有効にする (推奨)
+    "esModuleInterop": true, // CommonJS と ESモジュール間の相互運用性を向上させる
+    "skipLibCheck": true, // 依存ライブラリの型チェックをスキップする (ビルド時間短縮)
+    "forceConsistentCasingInFileNames": true, // ファイル名の大文字・小文字を区別する
+    "resolveJsonModule": true, // JSON モジュールのインポートを許可する
+    "sourceMap": true, // ソースマップファイル (.map) を生成する (デバッグ用)
+    "moduleResolution": "node" // モジュール解決戦略
+  },
+  "include": [
+    "index.ts", // コンパイル対象のファイルやパターン
+    "*.ts"      // カレントディレクトリのすべての .ts ファイル (index.ts 以外にもある場合)
+  ],
+  "exclude": [
+    "node_modules", // コンパイル対象から除外するディレクトリ
+    "dist"          // コンパイル結果の出力先も除外
+  ]
+}
