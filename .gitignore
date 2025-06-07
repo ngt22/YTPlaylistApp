@@ -46,6 +46,7 @@ frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
 frontend/.tsbuildinfo
+frontend/.env
 
 # Backend (Node.js Lambda)
 backend/dist/
