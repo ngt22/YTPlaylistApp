@@ -1,8 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { Playlist, Video } from '../types'; // 型定義をインポート
 
-const API_BASE_URL = 'YOUR_API_GATEWAY_ENDPOINT_URL'; // 実際のURLに置き換える
-
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
