@@ -1,0 +1,31 @@
+{
+  "name": "ytplaylistapp",
+  "version": "1.0.0",
+  "description": "YouTube Playlist App",
+  "main": "index.js",
+  "scripts": {
+    "deploy:backend": "node ./deploy.js",
+    "install:all": "npm install --workspaces", 
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ngt22/YTPlaylistApp.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ngt22/YTPlaylistApp/issues"
+  },
+  "homepage": "https://github.com/ngt22/YTPlaylistApp#readme",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "devDependencies": {
+    "archiver": "^7.0.1"
+  }
+}

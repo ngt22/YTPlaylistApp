@@ -1,13 +1,16 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # # dependencies
-# node_modules/
+node_modules/
 
 # # Expo
-# .expo/
-# dist/
-# web-build/
-# expo-env.d.ts
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+dist.zip
+deploy.sh
+deploy.js
 
 # Native
 .kotlin/
@@ -50,6 +53,7 @@ frontend/.env
 
 # Backend (Node.js Lambda)
 backend/dist/
+backend/dist.zip
 backend/node_modules/
 backend/coverage/
 backend/.serverless/
