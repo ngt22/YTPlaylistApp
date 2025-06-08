@@ -6,7 +6,7 @@
   "scripts": {
     "deploy:backend": "node ./deploy.js",
     "start:frontend": "npm run start --workspace=frontend",
-    "install:all": "npm install --workspaces", 
+    "install:all": "npm install --workspaces",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -26,5 +26,9 @@
   ],
   "devDependencies": {
     "archiver": "^7.0.1"
+  },
+  "dependencies": {
+    "expo": "^53.0.11",
+    "expo-linking": "~7.1.5"
   }
 }

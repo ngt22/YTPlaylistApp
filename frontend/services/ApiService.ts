@@ -1,7 +1,12 @@
 import axios, { AxiosError } from 'axios';
-import { Playlist, Video } from '../types'; // 型定義をインポート
+import { Playlist, Video, AddVideoPayload, CreatePlaylistPayload } from '../types'; // Added AddVideoPayload, CreatePlaylistPayload
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+// A simple check to ensure API_BASE_URL is set, otherwise throw an error or use a default.
+if (!API_BASE_URL) {
+  console.error("API_BASE_URL is not set. Please check your environment variables.");
+  // throw new Error("API_BASE_URL is not configured"); // Or provide a sensible default for local dev
+}
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -24,12 +29,7 @@ apiClient.interceptors.response.use(
   }
 );
 
-// APIペイロードの型定義
-export interface AddVideoPayload {
-  playlistName: string;
-  videoUrl: string;
-  videoTitle?: string;
-}
+// Local AddVideoPayload removed, will use the one from ../types
 
 export interface AddVideoResponse { // Lambdaからのレスポンス型 (例)
   message: string;
@@ -81,12 +81,24 @@ const ApiService = {
     }
   },
 
-  addVideoToPlaylist: async (data: AddVideoPayload): Promise<AddVideoResponse> => {
+  // Updated to use AddVideoPayload from ../types (expects playlistId)
+  addVideoToPlaylist: async (payload: AddVideoPayload): Promise<AddVideoResponse> => {
     try {
-      const response = await apiClient.post<AddVideoResponse>('/videos', data);
+      // Assuming the backend endpoint /videos can handle `playlistId` in the payload
+      const response = await apiClient.post<AddVideoResponse>('/videos', payload);
       return response.data;
     } catch (error) {
       console.error('addVideoToPlaylist error:', error);
+      throw error;
+    }
+  },
+
+  createPlaylist: async (payload: CreatePlaylistPayload): Promise<Playlist> => {
+    try {
+      const response = await apiClient.post<Playlist>('/playlists', payload);
+      return response.data;
+    } catch (error) {
+      console.error('createPlaylist error:', error);
       throw error;
     }
   },

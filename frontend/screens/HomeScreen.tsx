@@ -1,17 +1,20 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, Button, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
 import ApiService from '../services/ApiService';
-import { useFocusEffect, NavigationProp } from '@react-navigation/native';
+import { useFocusEffect, NavigationProp, RouteProp } from '@react-navigation/native'; // Added RouteProp
 import { Playlist, RootStackParamList } from '../types'; // 型定義をインポート
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons'; // For edit icon
 
 type HomeScreenNavigationProp = NavigationProp<RootStackParamList, 'Home'>;
+// Define the route prop type for HomeScreen to access sharedUrl
+type HomeScreenRouteProp = RouteProp<RootStackParamList, 'Home'>;
 
 interface Props {
   navigation: HomeScreenNavigationProp;
+  route: HomeScreenRouteProp; // Added route to props
 }
 
-export default function HomeScreen({ navigation }: Props): JSX.Element {
+export default function HomeScreen({ navigation, route }: Props): JSX.Element {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +22,20 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
   const [isEditPlaylistModalVisible, setIsEditPlaylistModalVisible] = useState(false);
   const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
   const [newPlaylistName, setNewPlaylistName] = useState('');
+
+  const [isCreatePlaylistModalVisible, setIsCreatePlaylistModalVisible] = useState(false);
+  const [newPlaylistInputName, setNewPlaylistInputName] = useState('');
+
+  // State for handling shared URL
+  const [isShareModalVisible, setIsShareModalVisible] = useState(false);
+  const [sharedVideoUrl, setSharedVideoUrl] = useState<string | null>(null);
+  const [selectedPlaylistForShare, setSelectedPlaylistForShare] = useState<Playlist | null>(null);
+  // Re-using newPlaylistInputName for creating playlist in share flow, or create a dedicated one e.g. newPlaylistNameForShare
+  // For simplicity, we might reuse newPlaylistInputName and manage its context (e.g. clear it appropriately)
+  // Or, let's define a new one for clarity if the "Create Playlist" FAB modal and "Share" modal can be open independently or have distinct flows.
+  // Given the FAB opens one modal, and share opens another, separate state is cleaner.
+  const [newPlaylistNameForShare, setNewPlaylistNameForShare] = useState('');
+
 
   const fetchPlaylists = async () => {
     setLoading(true);
@@ -65,7 +82,19 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
   useFocusEffect(
     useCallback(() => {
       fetchPlaylists();
-    }, [])
+
+      // Check for sharedUrl param when screen comes into focus
+      if (route.params?.sharedUrl) {
+        const urlToShare = route.params.sharedUrl;
+        console.log("HomeScreen received sharedUrl:", urlToShare);
+        setSharedVideoUrl(urlToShare);
+        setIsShareModalVisible(true);
+        setSelectedPlaylistForShare(null); // Reset selection
+        setNewPlaylistNameForShare(''); // Reset new playlist input for share modal
+        // Clear the param so it doesn't re-trigger on next focus without a new share action
+        navigation.setParams({ sharedUrl: undefined });
+      }
+    }, [route.params?.sharedUrl]) // Dependency on sharedUrl from route.params
   );
 
   if (loading) {
@@ -112,6 +141,68 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
     }
   };
 
+  const handleCreatePlaylist = async () => {
+    const trimmedName = newPlaylistInputName.trim();
+    if (!trimmedName) {
+      Alert.alert("エラー", "プレイリスト名を入力してください。");
+      return;
+    }
+
+    try {
+      // Assuming ApiService.createPlaylist exists and handles the API call
+      // For example: await ApiService.createPlaylist({ name: trimmedName });
+      // Simulating API call for now
+      await ApiService.createPlaylist({ name: trimmedName }); // Replace with actual call if available
+
+      Alert.alert("成功", `プレイリスト「${trimmedName}」が作成されました。`);
+      fetchPlaylists(); // Refresh playlists
+      setIsCreatePlaylistModalVisible(false);
+      setNewPlaylistInputName('');
+    } catch (error: any) {
+      console.error("プレイリストの作成に失敗:", error);
+      Alert.alert("エラー", `プレイリストの作成に失敗しました: ${error.message || '不明なエラー'}`);
+      // Optionally, do not close modal on error, or handle specific errors
+    }
+  };
+
+  const handleAddSharedVideoToPlaylist = (playlistId: string) => {
+    if (!sharedVideoUrl) {
+      Alert.alert("エラー", "共有された動画のURLが見つかりません。");
+      return;
+    }
+    navigation.navigate('AddVideo', { playlistId: playlistId, videoUrl: sharedVideoUrl });
+    setIsShareModalVisible(false);
+    setSharedVideoUrl(null);
+  };
+
+  const handleCreatePlaylistAndAddSharedVideo = async () => {
+    const trimmedName = newPlaylistNameForShare.trim();
+    if (!trimmedName) {
+      Alert.alert("エラー", "プレイリスト名を入力してください。");
+      return;
+    }
+    if (!sharedVideoUrl) {
+      Alert.alert("エラー", "共有された動画のURLが見つかりません。");
+      setIsShareModalVisible(false); // Close share modal as well
+      return;
+    }
+
+    try {
+      const newPlaylist = await ApiService.createPlaylist({ name: trimmedName });
+      Alert.alert("成功", `新しいプレイリスト「${trimmedName}」が作成されました。`);
+      fetchPlaylists(); // Refresh playlists
+      setNewPlaylistNameForShare(''); // Clear input
+
+      // Now add the video to this new playlist
+      handleAddSharedVideoToPlaylist(newPlaylist.playlistId);
+      // The share modal is already closed by handleAddSharedVideoToPlaylist
+    } catch (error: any) {
+      console.error("共有のためのプレイリスト作成に失敗:", error);
+      Alert.alert("エラー", `プレイリストの作成に失敗しました: ${error.message || '不明なエラー'}`);
+    }
+  };
+
+
   return (
     <View style={styles.container}>
       {playlists.length === 0 && !loading && (
@@ -140,10 +231,11 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
           </View>
         )}
       />
-      <Button
+      {/* <Button
         title="新しい動画を追加"
         onPress={() => navigation.navigate('AddVideo')}
-      />
+      /> */}
+      {/* Edit Playlist Modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -166,6 +258,111 @@ export default function HomeScreen({ navigation }: Props): JSX.Element {
           </View>
         </View>
       </Modal>
+
+      {/* Create New Playlist Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isCreatePlaylistModalVisible}
+        onRequestClose={() => {
+          setIsCreatePlaylistModalVisible(false);
+          setNewPlaylistInputName('');
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalTitle}>新しいプレイリストを作成</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newPlaylistInputName}
+              onChangeText={setNewPlaylistInputName}
+              placeholder="プレイリスト名"
+            />
+            <View style={styles.modalButtonContainer}>
+              <Button title="キャンセル" onPress={() => {
+                setIsCreatePlaylistModalVisible(false);
+                setNewPlaylistInputName('');
+              }} color="gray" />
+              <Button title="作成" onPress={handleCreatePlaylist} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setIsCreatePlaylistModalVisible(true)}
+      >
+        <MaterialIcons name="add" size={30} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Modal for adding shared video to a playlist */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isShareModalVisible}
+        onRequestClose={() => {
+          setIsShareModalVisible(false);
+          setSharedVideoUrl(null); // Clear the URL when closing
+          setSelectedPlaylistForShare(null);
+          setNewPlaylistNameForShare('');
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalTitle}>共有動画をプレイリストに追加</Text>
+            {sharedVideoUrl && <Text style={styles.shareUrlText}>動画URL: {sharedVideoUrl}</Text>}
+
+            <Text style={styles.modalSectionTitle}>既存のプレイリストに追加:</Text>
+            {playlists.length > 0 ? (
+              <FlatList
+                data={playlists}
+                keyExtractor={(item) => item.playlistId}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.playlistSelectItem,
+                      selectedPlaylistForShare?.playlistId === item.playlistId && styles.playlistSelectedItem
+                    ]}
+                    onPress={() => setSelectedPlaylistForShare(item)}
+                  >
+                    <Text style={styles.playlistSelectItemText}>{item.name}</Text>
+                  </TouchableOpacity>
+                )}
+                style={styles.playlistSelectionList}
+              />
+            ) : (
+              <Text style={styles.emptyShareText}>利用可能なプレイリストがありません。以下から作成してください。</Text>
+            )}
+            <Button
+              title="選択したプレイリストに追加"
+              onPress={() => selectedPlaylistForShare && handleAddSharedVideoToPlaylist(selectedPlaylistForShare.playlistId)}
+              disabled={!selectedPlaylistForShare || !sharedVideoUrl}
+            />
+
+            <Text style={styles.modalSectionTitle}>または、新しいプレイリストを作成して追加:</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="新しいプレイリスト名"
+              value={newPlaylistNameForShare}
+              onChangeText={setNewPlaylistNameForShare}
+            />
+            <Button
+              title="作成して追加"
+              onPress={handleCreatePlaylistAndAddSharedVideo}
+              disabled={!newPlaylistNameForShare.trim() || !sharedVideoUrl}
+            />
+            <View style={styles.modalButtonContainer}>
+              <Button title="キャンセル" onPress={() => {
+                setIsShareModalVisible(false);
+                setSharedVideoUrl(null);
+                setSelectedPlaylistForShare(null);
+                setNewPlaylistNameForShare('');
+               }} color="gray" />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -174,6 +371,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 10, backgroundColor: '#fff' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorText: { color: 'red', marginBottom: 10 },
+  emptyShareText: { textAlign: 'center', marginVertical: 10, fontSize: 14, color: 'gray' },
   emptyText: { textAlign: 'center', marginTop: 20, fontSize: 16, color: 'gray' },
   playlistItemContainer: {
     flexDirection: 'row',
@@ -231,7 +429,7 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
     paddingVertical: 12,
     paddingHorizontal: 15,
-    marginBottom: 25,
+    marginBottom: 15, // Adjusted
     borderRadius: 8,
     fontSize: 16,
   },
@@ -239,5 +437,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     width: '100%',
+    marginTop: 20, // Added margin
   },
+  fab: {
+    position: 'absolute',
+    margin: 16,
+    right: 20,
+    bottom: 20,
+    backgroundColor: '#007AFF', // iOS blue
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  shareUrlText: {
+    fontSize: 14,
+    color: 'gray',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  playlistSelectionList: {
+    maxHeight: 150, //  Limit height for scrollability
+    marginBottom: 15,
+  },
+  playlistSelectItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  playlistSelectedItem: {
+    backgroundColor: '#e0e0e0', // Highlight selected item
+  },
+  playlistSelectItemText: {
+    fontSize: 16,
+  }
 });

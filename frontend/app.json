@@ -2,6 +2,7 @@
   "expo": {
     "name": "YTPlaylistApp",
     "slug": "YTPlaylistApp",
+    "scheme": "myplaylistapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,13 +14,40 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.myplaylistapp",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["myplaylistapp", "exp"]
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.example.myplaylistapp",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "*.youtube.com",
+              "pathPattern": ".*watch.*"
+            },
+            {
+              "scheme": "https",
+              "host": "youtu.be",
+              "pathPattern": ".*"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {

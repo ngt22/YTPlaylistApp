@@ -121,14 +121,14 @@ export default function PlaylistDetailScreen({ route, navigation }: Props): JSX.
   };
 
 
-  if (!initialPlaylist || videos.length === 0) {
+  if (!initialPlaylist) { // Simplified check, as videos.length === 0 is handled below or by FlatList's ListEmptyComponent
     return (
-      <View style={styles.container}>
-        <Text style={styles.playlistTitle}>{playlistName || `プレイリスト ${initialPlaylist?.playlistId}`}</Text>
-        <Text style={styles.emptyText}>このプレイリストには動画がありません。</Text>
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>プレイリスト情報が見つかりません。</Text>
       </View>
     );
   }
+
 
   return (
     <View style={styles.container}>
@@ -136,6 +136,7 @@ export default function PlaylistDetailScreen({ route, navigation }: Props): JSX.
       <FlatList<Video>
         data={videos} // Use local state for videos
         keyExtractor={(item) => item.videoId || Math.random().toString()} // Ensure key is always string
+        ListEmptyComponent={<Text style={styles.emptyText}>このプレイリストには動画がありません。</Text>}
         renderItem={({ item }) => (
           <View style={styles.videoItemContainer}>
             {item.thumbnailUrl && <Image source={{ uri: item.thumbnailUrl }} style={styles.thumbnail} />}
@@ -175,12 +176,20 @@ export default function PlaylistDetailScreen({ route, navigation }: Props): JSX.
           </View>
         </View>
       </Modal>
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('AddVideo', { playlistId: initialPlaylist.playlistId, playlistName: playlistName })}
+      >
+        <MaterialIcons name="add" size={30} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 10, backgroundColor: '#fff' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  errorText: { fontSize: 16, color: 'red', textAlign: 'center' },
   playlistTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#333' },
   emptyText: { textAlign: 'center', marginTop: 50, fontSize: 18, color: 'gray' },
   videoItemContainer: {
@@ -260,5 +269,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-evenly', // Evenly space buttons
     width: '100%',
+  },
+  fab: {
+    position: 'absolute',
+    margin: 16,
+    right: 20,
+    bottom: 20,
+    backgroundColor: '#007AFF', // iOS blue
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
 });
