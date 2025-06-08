@@ -103,7 +103,9 @@ exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
       let videoThumbnailUrl = null; // Initialize videoThumbnailUrl
       try {
           const thumbnailData = await getYoutubeThumbnail(extractedVideoId);
-          if (thumbnailData) {
+
+          if (thumbnailData && typeof thumbnailData === 'object' && thumbnailData !== null) {
+              // It's an object, proceed to check for high, medium, default
               if (thumbnailData.high && thumbnailData.high.url) {
                   videoThumbnailUrl = thumbnailData.high.url;
               } else if (thumbnailData.medium && thumbnailData.medium.url) {
@@ -111,10 +113,14 @@ exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxy
               } else if (thumbnailData.default && thumbnailData.default.url) {
                   videoThumbnailUrl = thumbnailData.default.url;
               } else {
-                  console.warn(`No suitable thumbnail resolution found for video ID ${extractedVideoId}. Thumbnail data: ${JSON.stringify(thumbnailData)}`);
+                  console.warn(`Thumbnail data object received for video ID ${extractedVideoId}, but no suitable resolution (high, medium, default) found. Data: ${JSON.stringify(thumbnailData)}`);
               }
+          } else if (thumbnailData) {
+              // thumbnailData is truthy but not a suitable object (e.g., a string message from the library)
+              console.warn(`Unexpected thumbnail data format received from library for video ID ${extractedVideoId}. Expected an object, but got: ${JSON.stringify(thumbnailData)}`);
           } else {
-              console.warn(`No thumbnail data returned for video ID ${extractedVideoId}.`);
+              // thumbnailData is null or undefined (falsy)
+              console.warn(`No thumbnail data returned by library for video ID ${extractedVideoId}.`);
           }
       } catch (thumbError) {
           console.error(`Error fetching thumbnail for video ID ${extractedVideoId}:`, thumbError);
