@@ -1,36 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import ApiService, { AddVideoPayload } from '../services/ApiService'; // AddVideoPayload をインポート
-import { NavigationProp } from '@react-navigation/native';
-import { RootStackParamList, Playlist } from '../types';
+import { NavigationProp, RouteProp } from '@react-navigation/native'; // Added RouteProp
+import { RootStackParamList } from '../types'; // Playlist type might not be needed anymore
 
 type AddVideoScreenNavigationProp = NavigationProp<RootStackParamList, 'AddVideo'>;
+type AddVideoScreenRouteProp = RouteProp<RootStackParamList, 'AddVideo'>; // Added
 
 interface Props {
   navigation: AddVideoScreenNavigationProp;
+  route: AddVideoScreenRouteProp; // Added route
 }
 
-export default function AddVideoScreen({ navigation }: Props): JSX.Element {
+export default function AddVideoScreen({ navigation, route }: Props): JSX.Element {
+  const playlistIdFromRoute = route.params?.playlistId;
+  const playlistNameFromRoute = route.params?.playlistName;
+
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [videoTitle, setVideoTitle] = useState<string>('');
-  const [playlistName, setPlaylistName] = useState<string>(''); // For the text input, can be populated by picker or typed
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [selectedPlaylistName, setSelectedPlaylistName] = useState<string>(''); // For Picker's selected value
+  // Removed playlistName, playlists, selectedPlaylistName state variables
   const [loading, setLoading] = useState<boolean>(false);
 
-  useEffect(() => {
-    const fetchPlaylists = async () => {
-      try {
-        const fetchedPlaylists = await ApiService.getPlaylists();
-        setPlaylists(fetchedPlaylists);
-      } catch (error) {
-        console.error("Failed to fetch playlists:", error);
-        Alert.alert("エラー", "プレイリストの読み込みに失敗しました。");
-      }
-    };
-    fetchPlaylists();
-  }, []);
+  // Removed useEffect that fetches playlists
 
   const isValidYouTubeUrl = (url: string): boolean => {
     const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
@@ -42,27 +33,30 @@ export default function AddVideoScreen({ navigation }: Props): JSX.Element {
       Alert.alert("エラー", "有効な YouTube 動画の URL を入力してください。");
       return;
     }
-    if (!playlistName.trim()) {
-      Alert.alert("エラー", "プレイリスト名を入力してください。");
+    if (!playlistIdFromRoute) {
+      Alert.alert("エラー", "プレイリスト情報が見つかりません。動画を追加するプレイリストを指定してください。");
       return;
     }
 
     setLoading(true);
-    const payload: AddVideoPayload = {
-      playlistName: playlistName.trim(),
+    // Note: AddVideoPayload type in ApiService/types should be updated to:
+    // { playlistId: string; videoUrl: string; videoTitle?: string; }
+    const payload = { // Type assertion can be used if AddVideoPayload is updated elsewhere
+      playlistId: playlistIdFromRoute,
       videoUrl: videoUrl.trim(),
-      videoTitle: videoTitle.trim() || undefined, // Send undefined if empty
+      videoTitle: videoTitle.trim() || undefined,
     };
 
     try {
-      await ApiService.addVideoToPlaylist(payload);
-      Alert.alert("成功", "動画がプレイリストに追加されました。");
+      await ApiService.addVideoToPlaylist(payload as AddVideoPayload); // Using 'as' for now
+      Alert.alert("成功", `動画がプレイリスト「${playlistNameFromRoute || '選択されたプレイリスト'}」に追加されました。`);
       setVideoUrl('');
       setVideoTitle('');
-      setPlaylistName('');
+      // playlistName state removed
       navigation.goBack();
     } catch (error: any) {
       console.error("動画の追加に失敗:", error);
+      // Ensure playlistNameFromRoute is used in the error message if available
       Alert.alert("エラー", `動画の追加に失敗しました: ${error.message || 'サーバーエラー'}`);
     } finally {
       setLoading(false);
@@ -88,38 +82,14 @@ export default function AddVideoScreen({ navigation }: Props): JSX.Element {
         onChangeText={setVideoTitle}
       />
 
-      <Text style={styles.label}>プレイリストを選択または新規作成:</Text>
-      <Picker
-        selectedValue={selectedPlaylistName}
-        onValueChange={(itemValue, itemIndex) => {
-          setSelectedPlaylistName(itemValue);
-          if (itemValue) {
-            setPlaylistName(itemValue); // Update the text input as well
-          }
-        }}
-        style={styles.picker}
-      >
-        <Picker.Item label="既存のプレイリストを選択..." value="" />
-        {playlists.map((p) => (
-          <Picker.Item key={p.playlistId} label={p.name} value={p.name} />
-        ))}
-      </Picker>
+      {playlistNameFromRoute && (
+        <Text style={styles.playlistInfoText}>
+          追加先のプレイリスト: <Text style={styles.playlistNameHighlight}>{playlistNameFromRoute}</Text>
+        </Text>
+      )}
 
-      <Text style={styles.label}>プレイリスト名 (新規または選択済み):</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="例: お気に入り、学習用"
-        value={playlistName} // This is the value submitted
-        onChangeText={text => {
-          setPlaylistName(text);
-          // If user types, deselect from picker if text doesn't match any existing playlist name
-          if (!playlists.find(p => p.name === text)) {
-              setSelectedPlaylistName("");
-          } else {
-              setSelectedPlaylistName(text); // Reselect picker if text input matches
-          }
-        }}
-      />
+      {/* Picker and playlist name TextInput removed */}
+
       {loading ? (
         <ActivityIndicator size="large" style={styles.loader} />
       ) : (
@@ -131,19 +101,24 @@ export default function AddVideoScreen({ navigation }: Props): JSX.Element {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  label: { fontSize: 16, marginBottom: 8 },
+  label: { fontSize: 16, marginBottom: 8, marginTop: 10 },
   input: {
     borderWidth: 1,
     borderColor: '#ccc',
     padding: 10,
-    marginBottom: 20,
+    marginBottom: 15, // Adjusted margin
     borderRadius: 5,
   },
-  picker: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 20,
-    borderRadius: 5,
-  },
+  // picker style removed
   loader: { marginTop: 20 },
+  playlistInfoText: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#333',
+  },
+  playlistNameHighlight: {
+    fontWeight: 'bold',
+    color: '#007AFF', // Or your app's theme color
+  }
 });
