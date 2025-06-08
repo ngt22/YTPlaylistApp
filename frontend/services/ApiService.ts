@@ -42,6 +42,34 @@ export interface RemoveVideoPayload {
   videoId: string;
 }
 
+// For updating video title
+export interface UpdateVideoTitlePayload {
+  playlistId: string;
+  videoId: string;
+  newTitle: string;
+}
+
+export interface UpdateVideoTitleResponse {
+  message: string;
+  video: Video;
+}
+
+// For updating playlist name
+export interface UpdatePlaylistNamePayload {
+  playlistId: string;
+  newName: string;
+}
+
+export interface UpdatePlaylistNameResponse {
+  message: string;
+  playlist: Playlist;
+}
+
+// For deleting a playlist
+export interface DeletePlaylistResponse {
+  message: string;
+}
+
 const ApiService = {
   getPlaylists: async (userId: string = 'defaultUser'): Promise<Playlist[]> => {
     try {
@@ -69,6 +97,44 @@ const ApiService = {
       return response.data;
     } catch (error) {
       console.error('removeVideoFromPlaylist error:', error);
+      throw error;
+    }
+  },
+
+  updateVideoTitle: async (payload: UpdateVideoTitlePayload): Promise<UpdateVideoTitleResponse> => {
+    try {
+      const response = await apiClient.put<UpdateVideoTitleResponse>(
+        `/playlists/${payload.playlistId}/videos/${payload.videoId}/title`,
+        { newTitle: payload.newTitle } // Only send newTitle in the body
+      );
+      return response.data;
+    } catch (error) {
+      console.error('updateVideoTitle error:', error);
+      throw error;
+    }
+  },
+
+  updatePlaylistName: async (payload: UpdatePlaylistNamePayload): Promise<UpdatePlaylistNameResponse> => {
+    try {
+      const response = await apiClient.put<UpdatePlaylistNameResponse>(
+        `/playlists/${payload.playlistId}/name`,
+        { newName: payload.newName }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('updatePlaylistName error:', error);
+      throw error;
+    }
+  },
+
+  deletePlaylist: async (playlistId: string): Promise<DeletePlaylistResponse> => {
+    try {
+      const response = await apiClient.delete<DeletePlaylistResponse>(
+        `/playlists/${playlistId}`
+      );
+      return response.data;
+    } catch (error) {
+      console.error('deletePlaylist error:', error);
       throw error;
     }
   },
