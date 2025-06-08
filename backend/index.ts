@@ -8,7 +8,8 @@ const {
   GetCommand,
   UpdateCommand,
   DeleteCommand,
-  ScanCommand, // または QueryCommand
+  ScanCommand,
+  QueryCommand // Ensure this is present
 } = require("@aws-sdk/lib-dynamodb");
 const { randomUUID } = require('crypto'); // videoId生成用
 
