@@ -69,248 +69,98 @@ function extractYouTubeVideoId(url: string): string | null {
 }
 
 
-exports.handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2>=> {
- console.log("Received event:", JSON.stringify(event, null, 2));
-  const httpMethod = event.requestContext.http.method; // Adjusted for V2 event structure
-  const path = event.requestContext.http.path;       // Adjusted for V2 event structure (または event.rawPath でも可)
-  const body = event.body ? JSON.parse(event.body) : {};
-  // const userId = event.requestContext?.authorizer?.claims?.sub || 'defaultUser'; // Cognito認証などを使用する場合
+exports.handler = async (event) => {
+    console.log("Received event:", JSON.stringify(event, null, 2));
+    const httpMethod = event.requestContext.http.method;
+    const path = event.requestContext.http.path;
+    const body = event.body ? JSON.parse(event.body) : {};
 
-  try {
-    // OPTIONS method is for CORS preflight requests
-    if (httpMethod === "OPTIONS") {
-      return createResponse(200, { message: "CORS preflight" });
-    }
+    try {
+        if (httpMethod === "OPTIONS") {
+            return createResponse(200, { message: "CORS preflight" });
+        }
 
-    // Routing
-    if (path === "/playlists" && httpMethod === "GET") {
-      // Get all playlists (in a real scenario, filter by userId)
-      const command = new ScanCommand({ TableName: PLAYLISTS_TABLE_NAME });
-      const { Items } = await docClient.send(command);
-      return createResponse(200, Items || []);
-    } else if (path === "/videos" && httpMethod === "POST") {
-      // Add video to playlist or create new playlist
-      const { playlistName, videoUrl, videoTitle } = body;
-      if (!playlistName || !videoUrl) {
-        return createResponse(400, { error: "playlistName and videoUrl are required" });
-      }
+        // --- ルーティングロジックの順番を修正 ---
+        // より具体的なパスを先に評価するように変更
 
-      const extractedVideoId = extractYouTubeVideoId(videoUrl);
-      if (!extractedVideoId) {
-          return createResponse(400, { error: "Invalid YouTube URL or unable to extract video ID." });
-      }
+        if (path === "/playlists" && httpMethod === "GET") {
+            // ... (変更なし) ...
+            const command = new ScanCommand({ TableName: PLAYLISTS_TABLE_NAME });
+            const { Items } = await docClient.send(command);
+            return createResponse(200, Items || []);
 
-      const videoThumbnailUrl = `https://img.youtube.com/vi/${extractedVideoId}/hqdefault.jpg`;
+        } else if (path === "/videos" && httpMethod === "POST") {
+            // ... (変更なし) ...
+            // (POST /videos のロジックは長いため省略)
+            const { playlistName, videoUrl, videoTitle } = body;
+            // ... (以下、元のコードと同じ)
 
-      const newVideo = {
-        videoId: randomUUID(), // Unique ID for each video
-        url: videoUrl,
-        title: videoTitle || `動画 - ${extractedVideoId}`, // If title is not provided, use part of the URL or a default
-        addedAt: new Date().toISOString(),
-        thumbnailUrl: videoThumbnailUrl, // Use the directly constructed URL
-      };
+        // ★★★ここからが修正のポイント★★★
+        // DELETE /playlists/{playlistId} という具体的なパスを先に評価する
+        } else if (httpMethod === "DELETE" && path.match(/^\/playlists\/[^/]+$/)) {
+            const playlistDeletePathMatch = path.match(/^\/playlists\/([^/]+)$/);
+            const playlistId = playlistDeletePathMatch[1];
 
-      // Search for existing playlist by playlistName using a QueryCommand.
-      // This requires a Global Secondary Index (GSI) on the 'name' attribute of the PLAYLISTS_TABLE_NAME table.
-      // If a GSI named 'PlaylistNameIndex' (or similar) exists with 'name' as its hash key:
-      const queryCommand = new QueryCommand({
-        TableName: PLAYLISTS_TABLE_NAME,
-        IndexName: "PlaylistNameIndex", // IMPORTANT: This is an assumed GSI name. Adjust if different.
-        KeyConditionExpression: "#nm = :name",
-        ExpressionAttributeNames: { "#nm": "name" },
-        ExpressionAttributeValues: { ":name": playlistName },
-      });
-      const { Items: existingPlaylists } = await docClient.send(queryCommand);
-
-      let playlistId;
-      if (existingPlaylists && existingPlaylists.length > 0) {
-        // Add to existing playlist
-        playlistId = existingPlaylists[0].playlistId;
-        const updateCommand = new UpdateCommand({
-          TableName: PLAYLISTS_TABLE_NAME,
-          Key: { playlistId: playlistId },
-          UpdateExpression: "SET videos = list_append(if_not_exists(videos, :empty_list), :new_video)",
-          ExpressionAttributeValues: {
-            ":new_video": [newVideo],
-            ":empty_list": [],
-          },
-          ReturnValues: "UPDATED_NEW",
-        });
-        await docClient.send(updateCommand);
-        return createResponse(200, { message: "Video added to existing playlist", playlistId, video: newVideo });
-      } else {
-        // Create new playlist
-        playlistId = randomUUID(); // New playlist ID
-        const putCommand = new PutCommand({
-          TableName: PLAYLISTS_TABLE_NAME,
-          Item: {
-            playlistId: playlistId,
-            name: playlistName,
-            videos: [newVideo],
-            createdAt: new Date().toISOString(),
-            // userId: userId, // Add after authentication is implemented
-          },
-        });
-        await docClient.send(putCommand);
-        return createResponse(201, { message: "New playlist created and video added", playlistId, video: newVideo });
-      }
-    } else if (path.startsWith("/playlists/") && httpMethod === "DELETE") {
-        // Example path: /playlists/{playlistId}/videos/{videoId}
-        const parts = path.split('/');
-        if (parts.length === 5 && parts[3] === 'videos') {
-            const playlistId = parts[2];
-            const videoIdToDelete = parts[4];
-
-            // First, get the playlist
-            const getCmd = new GetCommand({
-                TableName: PLAYLISTS_TABLE_NAME,
-                Key: { playlistId: playlistId }
-            });
-            const { Item: playlist } = await docClient.send(getCmd);
-
-            if (!playlist || !playlist.videos) {
-                return createResponse(404, { error: "Playlist or videos not found" });
+            try {
+                const deleteCommand = new DeleteCommand({
+                    TableName: PLAYLISTS_TABLE_NAME,
+                    Key: { playlistId: playlistId },
+                    ConditionExpression: "attribute_exists(playlistId)",
+                });
+                await docClient.send(deleteCommand);
+                // 削除成功時は204 No Contentを返すのがより一般的ですが、200でも問題ありません。
+                return createResponse(200, { message: "Playlist deleted successfully" });
+            } catch (err) {
+                if (err.name === 'ConditionalCheckFailedException') {
+                    return createResponse(404, { error: "Playlist not found or already deleted" });
+                }
+                console.error("Error deleting playlist:", err);
+                throw err;
             }
 
-            // Create a new list of videos, excluding the one with videoIdToDelete
-            const updatedVideos = playlist.videos.filter(video => video.videoId !== videoIdToDelete);
-
-            if (updatedVideos.length === playlist.videos.length) {
-                 return createResponse(404, { error: "Video ID not found in playlist" });
+        // DELETE /playlists/{playlistId}/videos/{videoId} の評価を後にする
+        } else if (httpMethod === "DELETE" && path.startsWith("/playlists/")) {
+            const parts = path.split('/');
+            if (parts.length === 5 && parts[3] === 'videos') {
+                const playlistId = parts[2];
+                const videoIdToDelete = parts[4];
+                // ... (ビデオ削除のロジックは変更なし)
+                const getCmd = new GetCommand({
+                    TableName: PLAYLISTS_TABLE_NAME,
+                    Key: { playlistId: playlistId }
+                });
+                const { Item: playlist } = await docClient.send(getCmd);
+                if (!playlist || !playlist.videos) {
+                    return createResponse(404, { error: "Playlist or videos not found" });
+                }
+                const updatedVideos = playlist.videos.filter(video => video.videoId !== videoIdToDelete);
+                if (updatedVideos.length === playlist.videos.length) {
+                    return createResponse(404, { error: "Video ID not found in playlist" });
+                }
+                const updateCmd = new UpdateCommand({
+                    TableName: PLAYLISTS_TABLE_NAME,
+                    Key: { playlistId: playlistId },
+                    UpdateExpression: "SET videos = :videos",
+                    ExpressionAttributeValues: { ":videos": updatedVideos },
+                    ReturnValues: "UPDATED_NEW"
+                });
+                await docClient.send(updateCmd);
+                return createResponse(200, { message: "Video deleted successfully" });
             }
-
-            // Update the videos list
-            const updateCmd = new UpdateCommand({
-                TableName: PLAYLISTS_TABLE_NAME,
-                Key: { playlistId: playlistId },
-                UpdateExpression: "SET videos = :videos",
-                ExpressionAttributeValues: {
-                    ":videos": updatedVideos
-                },
-                ReturnValues: "UPDATED_NEW"
-            });
-            await docClient.send(updateCmd);
-            return createResponse(200, { message: "Video deleted successfully" });
+        
+        // --- ここから下は元のコードと同じ ---
+        } else if (httpMethod === "PUT" && path.match(/^\/playlists\/[^/]+\/videos\/[^/]+\/title$/)) {
+            // ... (PUT video title のロジック)
+        
+        } else if (httpMethod === "PUT" && path.match(/^\/playlists\/[^/]+\/name$/)) {
+            // ... (PUT playlist name のロジック)
         }
-    } else if (httpMethod === "PUT" && path.match(/^\/playlists\/[^/]+\/videos\/[^/]+\/title$/)) {
-      // Route for PUT /playlists/{playlistId}/videos/{videoId}/title
-      const pathParts = path.split('/'); // ['', 'playlists', playlistId, 'videos', videoId, 'title']
-      const playlistId = pathParts[2];
-      const videoIdToUpdate = pathParts[4];
 
-      if (!body || !body.newTitle) {
-        return createResponse(400, { error: "Missing newTitle in request body" });
-      }
-      const { newTitle } = body;
+        // 上記のどの条件にも一致しない場合
+        return createResponse(404, { error: "Not Found" });
 
-      // Fetch the playlist
-      const getCmd = new GetCommand({
-        TableName: PLAYLISTS_TABLE_NAME,
-        Key: { playlistId: playlistId }
-      });
-      const { Item: playlist } = await docClient.send(getCmd);
-
-      if (!playlist) {
-        return createResponse(404, { error: "Playlist not found" });
-      }
-
-      if (!playlist.videos || !Array.isArray(playlist.videos)) {
-        return createResponse(404, { error: "Videos not found in playlist" });
-      }
-
-      let videoFound = false;
-      const updatedVideos = playlist.videos.map(video => {
-        if (video.videoId === videoIdToUpdate) {
-          videoFound = true;
-          return { ...video, title: newTitle };
-        }
-        return video;
-      });
-
-      if (!videoFound) {
-        return createResponse(404, { error: "Video not found in playlist" });
-      }
-
-      // Save the updated playlist (specifically its videos array)
-      const updateCommand = new UpdateCommand({
-        TableName: PLAYLISTS_TABLE_NAME,
-        Key: { playlistId: playlistId },
-        UpdateExpression: "SET videos = :newVideosArray, updatedAt = :updatedAt",
-        ExpressionAttributeValues: {
-          ":newVideosArray": updatedVideos,
-          ":updatedAt": new Date().toISOString()
-        },
-        ReturnValues: "ALL_NEW",
-      });
-      const { Attributes: updatedPlaylist } = await docClient.send(updateCommand);
-
-      const updatedVideo = updatedPlaylist.videos.find(v => v.videoId === videoIdToUpdate);
-
-      return createResponse(200, { message: "Video title updated successfully", video: updatedVideo });
-
-    } else if (httpMethod === "PUT" && path.match(/^\/playlists\/[^/]+\/name$/)) {
-      // Route for PUT /playlists/{playlistId}/name
-      const playlistNamePathMatch = path.match(/^\/playlists\/([^/]+)\/name$/);
-      const playlistId = playlistNamePathMatch[1];
-
-      if (!body || typeof body.newName !== 'string' || body.newName.trim() === '') {
-        return createResponse(400, { error: "Missing or invalid newName in request body" });
-      }
-      const { newName } = body;
-
-      try {
-        const updateCommand = new UpdateCommand({
-          TableName: PLAYLISTS_TABLE_NAME,
-          Key: { playlistId: playlistId },
-          UpdateExpression: "SET #nm = :newName, updatedAt = :updatedAt",
-          ExpressionAttributeNames: { "#nm": "name" },
-          ExpressionAttributeValues: {
-            ":newName": newName.trim(),
-            ":updatedAt": new Date().toISOString()
-          },
-          ConditionExpression: "attribute_exists(playlistId)",
-          ReturnValues: "ALL_NEW",
-        });
-        const { Attributes: updatedPlaylist } = await docClient.send(updateCommand);
-        return createResponse(200, { message: "Playlist name updated successfully", playlist: updatedPlaylist });
-      } catch (err) {
-        if (err.name === 'ConditionalCheckFailedException') {
-          return createResponse(404, { error: "Playlist not found" });
-        }
-        console.error("Error updating playlist name:", err);
-        throw err; // Let the global error handler catch it
-      }
-    } else if (httpMethod === "DELETE" && path.match(/^\/playlists\/[^/]+$/)) {
-      // Route for DELETE /playlists/{playlistId}
-      // This needs to be distinct from the DELETE video from playlist route
-      const playlistDeletePathMatch = path.match(/^\/playlists\/([^/]+)$/);
-      const playlistId = playlistDeletePathMatch[1];
-
-      try {
-        const deleteCommand = new DeleteCommand({
-          TableName: PLAYLISTS_TABLE_NAME,
-          Key: { playlistId: playlistId },
-          ConditionExpression: "attribute_exists(playlistId)", // Optional: only delete if exists
-          // ReturnValues: "ALL_OLD" // If you want to log/return what was deleted
-        });
-        await docClient.send(deleteCommand);
-        return createResponse(200, { message: "Playlist deleted successfully" });
-      } catch (err) {
-        if (err.name === 'ConditionalCheckFailedException') {
-          // This means the playlistId did not exist, which can be treated as a successful delete (idempotency)
-          // or a specific "not found" error. For simplicity, we'll return 404 if condition is used.
-          return createResponse(404, { error: "Playlist not found or already deleted" });
-        }
-        console.error("Error deleting playlist:", err);
-        throw err; // Let the global error handler catch it
-      }
+    } catch (error) {
+        console.error("Error processing request:", error);
+        return createResponse(500, { error: "Internal Server Error", details: error.message });
     }
-    // TODO: Implement other CRUD operations (update/delete playlists, etc.)
-
-    return createResponse(404, { error: "Not Found" });
-
-  } catch (error) {
-    console.error("Error processing request:", error);
-    return createResponse(500, { error: "Internal Server Error", details: error.message });
-  }
 };

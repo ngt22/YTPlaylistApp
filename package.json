@@ -5,9 +5,8 @@
   "main": "index.js",
   "scripts": {
     "deploy:backend": "node ./deploy.js",
+    "start:frontend": "npm run start --workspace=frontend",
     "install:all": "npm install --workspaces", 
-    "dev:frontend": "npm run dev --workspace=frontend",
-    "dev:backend": "npm run dev --workspace=backend",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
